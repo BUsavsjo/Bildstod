@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bildstöd – Dagsplanerare</title>
+  <style>
+    :root{
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #0b1220;
+      --card: #111827;
+      --card-done: #0b1b13;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --accent-2: #60a5fa;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --ring: rgba(96,165,250,0.8);
+      --radius: 18px;
+    }
+
+    *{ box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(1200px 800px at 10% -10%, #1f2937 0%, var(--bg) 45%, #05080f 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header{
+      position: sticky; top:0; z-index:10;
+      background: linear-gradient(180deg, rgba(15,23,42,0.98), rgba(15,23,42,0.92));
+      border-bottom: 1px solid rgba(148,163,184,0.15);
+      padding: 10px 12px;
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    }
+    header .title{
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      font-size: 18px;
+      margin-right: auto;
+      display:flex; align-items:center; gap:8px;
+    }
+    header .pill{
+      font-size: 12px; color: var(--muted);
+      background: rgba(148,163,184,0.12);
+      padding: 4px 8px; border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.2);
+    }
+
+    .btn{
+      border: 1px solid rgba(148,163,184,0.25);
+      background: rgba(17,24,39,0.9);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s ease;
+      display:inline-flex; align-items:center; gap:8px;
+      user-select:none;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(96,165,250,0.6); }
+    .btn:active{ transform: translateY(0); }
+    .btn.primary{ background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.6); }
+    .btn.blue{ background: rgba(96,165,250,0.12); border-color: rgba(96,165,250,0.55); }
+    .btn.warn{ background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.55); }
+    .btn.danger{ background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.55); }
+
+    main{
+      padding: 12px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .slot{
+      background: linear-gradient(180deg, rgba(17,24,39,0.95), rgba(11,18,32,0.95));
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: var(--radius);
+      padding: 10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+    }
+    .slot-header{
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      padding: 6px 6px 10px 6px;
+      border-bottom: 1px dashed rgba(148,163,184,0.18);
+    }
+    .slot-title{
+      font-weight: 800; font-size: 18px;
+      letter-spacing: 0.2px;
+      display:flex; align-items:center; gap:8px;
+    }
+    .slot-sub{
+      font-size: 12px; color: var(--muted);
+      margin-left: 4px;
+    }
+    .slot-actions{ margin-left:auto; display:flex; gap:6px; }
+
+    .cards{
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+      min-height: 48px;
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(17,24,39,0.95), rgba(15,23,42,0.95));
+      border: 2px solid rgba(148,163,184,0.18);
+      border-radius: 16px;
+      padding: 10px;
+      display:flex; gap:10px; align-items:center;
+      min-height: 86px;
+      position: relative;
+      cursor: pointer;
+      transition: 0.12s ease;
+      outline:none;
+    }
+    .card:hover{ border-color: rgba(96,165,250,0.6); transform: translateY(-1px); }
+    .card:focus-visible{ box-shadow: 0 0 0 4px var(--ring); }
+    .card.done{
+      background: linear-gradient(180deg, rgba(11,27,19,0.95), rgba(9,24,16,0.95));
+      border-color: rgba(34,197,94,0.6);
+      opacity: 0.92;
+    }
+    .card.now{
+      border-color: rgba(96,165,250,0.9);
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.35);
+    }
+
+    .icon{
+      width: 64px; height: 64px; flex: 0 0 64px;
+      border-radius: 12px;
+      background: rgba(148,163,184,0.08);
+      display:grid; place-items:center;
+      font-size: 36px;
+      border: 1px solid rgba(148,163,184,0.18);
+    }
+
+    .card-text{
+      display:flex; flex-direction:column; gap:4px;
+      width: 100%;
+    }
+    .label{
+      font-size: 18px; font-weight: 800; line-height: 1.2;
+    }
+    .time{
+      font-size: 13px; color: var(--muted);
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .badge{
+      position:absolute; top:8px; right:8px;
+      font-size: 11px; font-weight: 800;
+      padding: 4px 6px; border-radius: 999px;
+      background: rgba(99,102,241,0.15);
+      color: #c7d2fe;
+      border: 1px solid rgba(99,102,241,0.45);
+    }
+    .badge.done{
+      background: rgba(34,197,94,0.12);
+      color: #bbf7d0;
+      border-color: rgba(34,197,94,0.55);
+    }
+
+    .drag-handle{
+      position:absolute; bottom:6px; right:6px;
+      font-size: 12px; color: var(--muted);
+      opacity: 0.7;
+      display:none;
+    }
+    .edit-on .drag-handle{ display:block; }
+
+    .empty{
+      border: 2px dashed rgba(148,163,184,0.25);
+      border-radius: 14px;
+      padding: 12px;
+      color: var(--muted);
+      text-align:center;
+      font-size: 14px; font-weight: 700;
+    }
+
+    /* Modal */
+    .modal-backdrop{
+      position: fixed; inset:0; background: rgba(0,0,0,0.6);
+      display:none; place-items:center; z-index:100;
+      padding: 12px;
+    }
+    .modal-backdrop.show{ display:grid; }
+    .modal{
+      width: 100%; max-width: 520px;
+      background: var(--panel);
+      border: 1px solid rgba(148,163,184,0.2);
+      border-radius: 18px;
+      padding: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    }
+    .modal h2{
+      margin: 6px 4px 10px;
+      font-size: 20px;
+    }
+    .modal .row{
+      display:grid; grid-template-columns: 1fr 1fr; gap:8px;
+      margin-bottom: 8px;
+    }
+    .modal label{
+      font-size: 12px; font-weight: 800; color: var(--muted);
+      margin: 2px 2px 4px; display:block;
+    }
+    .modal input, .modal select{
+      width:100%;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,0.25);
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 16px; font-weight: 700;
+      outline:none;
+    }
+
+    .library{
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap:8px; max-height: 260px; overflow:auto;
+      padding: 6px; background: rgba(0,0,0,0.2);
+      border-radius: 12px; border: 1px solid rgba(148,163,184,0.18);
+    }
+    .lib-item{
+      background: rgba(148,163,184,0.06);
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: 12px; padding: 8px;
+      display:flex; flex-direction:column; align-items:center; gap:6px;
+      cursor:pointer; transition:0.1s ease;
+      text-align:center;
+    }
+    .lib-item:hover{ border-color: rgba(96,165,250,0.6); transform: translateY(-1px); }
+    .lib-emoji{ font-size: 30px; }
+    .lib-label{ font-size: 12px; font-weight: 800; color: var(--text); }
+
+    .modal-actions{
+      display:flex; gap:8px; justify-content:flex-end; margin-top: 10px;
+    }
+
+    footer{
+      opacity:0.8; color: var(--muted); font-size: 12px;
+      padding: 10px 12px; text-align:center;
+    }
+
+    @media (min-width: 720px){
+      header .title{ font-size: 20px; }
+      .slot-title{ font-size: 20px; }
+      .label{ font-size: 20px; }
+      .icon{ width: 72px; height: 72px; font-size: 40px; }
+      .card{ min-height: 96px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <span style="font-size:22px;">🧩</span>
+    Bildstöd – Dagsplanerare
+    <span class="pill" id="modePill">Barnläge</span>
+  </div>
+
+  <button class="btn blue" id="toggleModeBtn" aria-label="Växla vuxen/barnläge">🔒 Lås upp (vuxenläge)</button>
+  <button class="btn" id="toggleTimesBtn" aria-label="Visa eller dölj tider">🕒 Visa tider</button>
+  <button class="btn warn" id="resetDoneBtn" aria-label="Nollställ klarmarkeringar">↺ Nollställ Klar</button>
+  <button class="btn" id="exportBtn" aria-label="Exportera dag som fil">⬇️ Exportera</button>
+  <label class="btn" for="importInput" style="cursor:pointer;">⬆️ Importera</label>
+  <input id="importInput" type="file" accept="application/json" style="display:none;" />
+</header>
+
+<main id="board"></main>
+
+<div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2 id="modalTitle">Lägg till aktivitet</h2>
+
+    <div class="row">
+      <div>
+        <label for="activityText">Text (kort och tydlig)</label>
+        <input id="activityText" placeholder="t.ex. Frukost" />
+      </div>
+      <div>
+        <label for="activityTime">Tid (valfritt)</label>
+        <input id="activityTime" placeholder="t.ex. 09:30" />
+      </div>
+    </div>
+
+    <label>Välj bild (tryck på en ikon)</label>
+    <div class="library" id="library"></div>
+
+    <input id="activityEmoji" type="hidden" />
+
+    <div class="modal-actions">
+      <button class="btn" id="cancelBtn">Avbryt</button>
+      <button class="btn danger" id="deleteBtn" style="display:none;">Ta bort</button>
+      <button class="btn primary" id="saveBtn">Spara</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Lokal lagring i webbläsaren. Ingen inloggning. Inget data lämnar enheten.
+</footer>
+
+<script>
+/* =========================================================
+   Bildstöd – Dagsplanerare (frontend-only)
+   Designad för barn med NPF: få val, stora ytor, stabil layout.
+   ========================================================= */
+
+// Fast slots (enkelt för barnet)
+const DEFAULT_SLOTS = [
+  { key: "morning",  label: "Morgon",      hint: "Start och rutiner" },
+  { key: "forenoon", label: "Förmiddag",  hint: "Fokus/Skola" },
+  { key: "lunch",    label: "Lunch",      hint: "Mat och paus" },
+  { key: "afternoon",label: "Eftermiddag",hint: "Aktivitet/lek" },
+  { key: "evening",  label: "Kväll",      hint: "Varva ner och sova" }
+];
+
+// Lugn, igenkännbar startbank av pictos (emoji som placeholder)
+const LIBRARY = [
+  {emoji:"🌅", text:"Vakna"}, {emoji:"🍞", text:"Frukost"}, {emoji:"🧥", text:"Klä på sig"},
+  {emoji:"🪥", text:"Borsta tänder"}, {emoji:"💇", text:"Borsta håret"}, {emoji:"🚗", text:"Åka"},
+  {emoji:"🏫", text:"Skola"}, {emoji:"📚", text:"Läsa"}, {emoji:"✏️", text:"Skola/Arbete"},
+  {emoji:"🥪", text:"Mellis"}, {emoji:"🍲", text:"Lunch"}, {emoji:"🍝", text:"Middag"},
+  {emoji:"🌳", text:"Ute"}, {emoji:"⚽", text:"Lek ute"}, {emoji:"🎨", text:"Rita"},
+  {emoji:"🧱", text:"Bygga"}, {emoji:"🎲", text:"Spel"}, {emoji:"📺", text:"Skärmtid"},
+  {emoji:"🚲", text:"Cykla"}, {emoji:"🧘", text:"Vila"}, {emoji:"📖", text:"Bok"},
+  {emoji:"🛁", text:"Bada"}, {emoji:"😴", text:"Sova"}, {emoji:"💊", text:"Medicin"},
+  {emoji:"🎵", text:"Musik"}, {emoji:"🤸", text:"Rörelse"}, {emoji:"🧹", text:"Städa"},
+];
+
+const STORAGE_KEY = "bildstod_plan_v1";
+
+// ----- State -----
+let state = loadState() || makeDefaultState();
+let editMode = false;       // Barnläge default
+let showTimes = false;
+let editingContext = null;  // {slotKey, itemId}
+
+// ----- Init -----
+const boardEl = document.getElementById("board");
+const modePill = document.getElementById("modePill");
+const toggleModeBtn = document.getElementById("toggleModeBtn");
+const toggleTimesBtn = document.getElementById("toggleTimesBtn");
+const resetDoneBtn = document.getElementById("resetDoneBtn");
+const exportBtn = document.getElementById("exportBtn");
+const importInput = document.getElementById("importInput");
+
+const modalBackdrop = document.getElementById("modalBackdrop");
+const modalTitle = document.getElementById("modalTitle");
+const activityText = document.getElementById("activityText");
+const activityTime = document.getElementById("activityTime");
+const activityEmoji = document.getElementById("activityEmoji");
+const libraryEl = document.getElementById("library");
+const cancelBtn = document.getElementById("cancelBtn");
+const saveBtn = document.getElementById("saveBtn");
+const deleteBtn = document.getElementById("deleteBtn");
+
+renderLibrary();
+render();
+
+toggleModeBtn.addEventListener("click", () => {
+  editMode = !editMode;
+  modePill.textContent = editMode ? "Vuxenläge" : "Barnläge";
+  toggleModeBtn.textContent = editMode ? "🔓 Lås (barnläge)" : "🔒 Lås upp (vuxenläge)";
+  document.body.classList.toggle("edit-on", editMode);
+  render();
+});
+
+toggleTimesBtn.addEventListener("click", () => {
+  showTimes = !showTimes;
+  toggleTimesBtn.textContent = showTimes ? "🕒 Dölj tider" : "🕒 Visa tider";
+  render();
+});
+
+resetDoneBtn.addEventListener("click", () => {
+  for (const slot of state.slots){
+    for (const id of slot.items){
+      state.items[id].done = false;
+    }
+  }
+  saveState();
+  render();
+});
+
+exportBtn.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bildstod-${state.id}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+importInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try{
+    const text = await file.text();
+    const imported = JSON.parse(text);
+    if (imported && imported.slots && imported.items){
+      state = imported;
+      saveState();
+      render();
+    } else {
+      alert("Filen såg inte ut som en dagsplan.");
+    }
+  }catch(err){
+    alert("Kunde inte läsa filen.");
+  } finally {
+    importInput.value = "";
+  }
+});
+
+// Modal events
+cancelBtn.addEventListener("click", closeModal);
+modalBackdrop.addEventListener("click", (e)=> {
+  if (e.target === modalBackdrop) closeModal();
+});
+
+saveBtn.addEventListener("click", () => {
+  const text = activityText.value.trim();
+  const time = activityTime.value.trim();
+  const emoji = activityEmoji.value || "🟦";
+
+  if (!text){
+    activityText.focus();
+    return;
+  }
+
+  if (editingContext?.itemId){
+    // Update existing
+    const item = state.items[editingContext.itemId];
+    item.text = text;
+    item.time = time;
+    item.emoji = emoji;
+  } else if (editingContext?.slotKey){
+    // Add new
+    const id = crypto.randomUUID();
+    state.items[id] = { id, text, time, emoji, done:false };
+    const slot = state.slots.find(s=>s.key===editingContext.slotKey);
+    slot.items.push(id);
+  }
+
+  saveState();
+  closeModal();
+  render();
+});
+
+deleteBtn.addEventListener("click", () => {
+  if (!editingContext?.itemId) return;
+  const {slotKey, itemId} = editingContext;
+  const slot = state.slots.find(s=>s.key===slotKey);
+  slot.items = slot.items.filter(id=>id!==itemId);
+  delete state.items[itemId];
+  saveState();
+  closeModal();
+  render();
+});
+
+// ----- Rendering -----
+function render(){
+  boardEl.innerHTML = "";
+  const nextId = findNextUndoneId();
+
+  for (const slot of state.slots){
+    const slotEl = document.createElement("section");
+    slotEl.className = "slot";
+    slotEl.dataset.slotKey = slot.key;
+
+    const header = document.createElement("div");
+    header.className = "slot-header";
+
+    const title = document.createElement("div");
+    title.className = "slot-title";
+    title.textContent = slot.label;
+
+    const sub = document.createElement("div");
+    sub.className = "slot-sub";
+    sub.textContent = slot.hint || "";
+
+    header.appendChild(title);
+    header.appendChild(sub);
+
+    const actions = document.createElement("div");
+    actions.className = "slot-actions";
+    if (editMode){
+      const addBtn = document.createElement("button");
+      addBtn.className = "btn blue";
+      addBtn.textContent = "＋ Lägg till";
+      addBtn.addEventListener("click", ()=> openAddModal(slot.key));
+      actions.appendChild(addBtn);
+    }
+    header.appendChild(actions);
+    slotEl.appendChild(header);
+
+    const cardsEl = document.createElement("div");
+    cardsEl.className = "cards";
+    cardsEl.dataset.dropSlot = slot.key;
+
+    if (slot.items.length === 0){
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = editMode ? "Inga aktiviteter ännu. Tryck “Lägg till”." : "Tomt just nu.";
+      cardsEl.appendChild(empty);
+    }
+
+    for (const id of slot.items){
+      const item = state.items[id];
+      const card = document.createElement("button");
+      card.className = "card" + (item.done ? " done" : "") + (id === nextId ? " now" : "");
+      card.type = "button";
+      card.dataset.itemId = id;
+      card.dataset.slotKey = slot.key;
+      card.draggable = editMode;
+
+      // Click behavior
+      card.addEventListener("click", () => {
+        if (editMode){
+          openEditModal(slot.key, id);
+        } else {
+          item.done = !item.done;
+          saveState();
+          render();
+        }
+      });
+
+      // Drag behavior (only edit mode)
+      if (editMode){
+        card.addEventListener("dragstart", onDragStart);
+        card.addEventListener("dragend", onDragEnd);
+      }
+
+      const icon = document.createElement("div");
+      icon.className = "icon";
+      icon.textContent = item.emoji || "🟦";
+
+      const txt = document.createElement("div");
+      txt.className = "card-text";
+
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = item.text;
+
+      txt.appendChild(label);
+
+      if (showTimes && item.time){
+        const timeEl = document.createElement("div");
+        timeEl.className = "time";
+        timeEl.textContent = item.time;
+        txt.appendChild(timeEl);
+      }
+
+      const badge = document.createElement("div");
+      badge.className = "badge " + (item.done ? "done" : "");
+      badge.textContent = item.done ? "KLAR" : (id===nextId ? "NU" : "");
+
+      const handle = document.createElement("div");
+      handle.className = "drag-handle";
+      handle.textContent = "↕ dra";
+
+      card.appendChild(icon);
+      card.appendChild(txt);
+      if (badge.textContent) card.appendChild(badge);
+      card.appendChild(handle);
+
+      cardsEl.appendChild(card);
+    }
+
+    // Drop zone
+    if (editMode){
+      cardsEl.addEventListener("dragover", onDragOver);
+      cardsEl.addEventListener("drop", onDrop);
+    }
+
+    slotEl.appendChild(cardsEl);
+    boardEl.appendChild(slotEl);
+  }
+}
+
+function renderLibrary(){
+  libraryEl.innerHTML = "";
+  for (const it of LIBRARY){
+    const el = document.createElement("div");
+    el.className = "lib-item";
+    el.tabIndex = 0;
+
+    const emo = document.createElement("div");
+    emo.className = "lib-emoji";
+    emo.textContent = it.emoji;
+
+    const lbl = document.createElement("div");
+    lbl.className = "lib-label";
+    lbl.textContent = it.text;
+
+    el.appendChild(emo);
+    el.appendChild(lbl);
+
+    el.addEventListener("click", () => {
+      activityEmoji.value = it.emoji;
+      if (!activityText.value) activityText.value = it.text;
+      highlightLibrary(it.emoji);
+    });
+
+    libraryEl.appendChild(el);
+  }
+}
+
+function highlightLibrary(emoji){
+  for (const child of libraryEl.children){
+    child.style.borderColor = (child.querySelector(".lib-emoji").textContent === emoji)
+      ? "rgba(34,197,94,0.9)"
+      : "rgba(148,163,184,0.18)";
+  }
+}
+
+// ----- Modal helpers -----
+function openAddModal(slotKey){
+  editingContext = {slotKey, itemId:null};
+  modalTitle.textContent = "Lägg till aktivitet";
+  activityText.value = "";
+  activityTime.value = "";
+  activityEmoji.value = "";
+  highlightLibrary(null);
+  deleteBtn.style.display = "none";
+  modalBackdrop.classList.add("show");
+  activityText.focus();
+}
+
+function openEditModal(slotKey, itemId){
+  editingContext = {slotKey, itemId};
+  const item = state.items[itemId];
+  modalTitle.textContent = "Ändra aktivitet";
+  activityText.value = item.text || "";
+  activityTime.value = item.time || "";
+  activityEmoji.value = item.emoji || "";
+  highlightLibrary(item.emoji);
+  deleteBtn.style.display = "inline-flex";
+  modalBackdrop.classList.add("show");
+  activityText.focus();
+}
+
+function closeModal(){
+  modalBackdrop.classList.remove("show");
+  editingContext = null;
+}
+
+// ----- Drag and drop -----
+let dragItemId = null;
+let dragFromSlot = null;
+
+function onDragStart(e){
+  dragItemId = e.currentTarget.dataset.itemId;
+  dragFromSlot = e.currentTarget.dataset.slotKey;
+  e.dataTransfer.effectAllowed = "move";
+  e.currentTarget.style.opacity = "0.6";
+}
+
+function onDragEnd(e){
+  e.currentTarget.style.opacity = "1";
+  dragItemId = null;
+  dragFromSlot = null;
+}
+
+function onDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+}
+
+function onDrop(e){
+  e.preventDefault();
+  const toSlotKey = e.currentTarget.dataset.dropSlot;
+  if (!dragItemId || !dragFromSlot) return;
+
+  if (toSlotKey === dragFromSlot){
+    // Reorder within same slot by dropping near end (simple MVP)
+    // We'll move to end if same slot
+    const slot = state.slots.find(s=>s.key===toSlotKey);
+    slot.items = slot.items.filter(id=>id!==dragItemId);
+    slot.items.push(dragItemId);
+  } else {
+    // Move between slots
+    const fromSlot = state.slots.find(s=>s.key===dragFromSlot);
+    const toSlot = state.slots.find(s=>s.key===toSlotKey);
+    fromSlot.items = fromSlot.items.filter(id=>id!==dragItemId);
+    toSlot.items.push(dragItemId);
+  }
+
+  saveState();
+  render();
+}
+
+// ----- Logic helpers -----
+function findNextUndoneId(){
+  for (const slot of state.slots){
+    for (const id of slot.items){
+      if (!state.items[id].done) return id;
+    }
+  }
+  return null;
+}
+
+function makeDefaultState(){
+  const today = new Date();
+  const id = today.toISOString().slice(0,10);
+  const slots = DEFAULT_SLOTS.map(s=>({ ...s, items: [] }));
+
+  // Exempel utifrån ditt schema (kan rensas av vuxen snabbt)
+  const items = {};
+  function add(slotKey, text, time, emoji){
+    const id = crypto.randomUUID();
+    items[id] = {id, text, time, emoji, done:false};
+    slots.find(s=>s.key===slotKey).items.push(id);
+  }
+
+  add("morning", "Vakna", "", "🌅");
+  add("morning", "Frukost", "", "🍞");
+  add("morning", "Klä på sig (innekläder)", "", "👕");
+  add("morning", "Borsta håret", "", "💇");
+  add("morning", "Borsta tänderna", "", "🪥");
+  add("morning", "Klä på sig (ytterkläder)", "", "🧥");
+  add("morning", "Åka till skolan", "09:30", "🚗");
+
+  add("forenoon", "Skola", "10:00–11:00", "🏫");
+  add("lunch", "Lunch", "12:00–13:00", "🍲");
+  add("afternoon", "Utomhusaktivitet", "13:00–14:00", "🌳");
+  add("afternoon", "Mellis", "14:30", "🥪");
+  add("afternoon", "Egen tid", "15:00–16:30", "🎨");
+
+  add("evening", "Middag", "17:30", "🍝");
+  add("evening", "Egen tid", "18:00", "🎲");
+  add("evening", "Kvällsmedicin", "19:00", "💊");
+  add("evening", "Sova", "20:00", "😴");
+
+  return { id, title:"Dagsplan", slots, items, version:1 };
+}
+
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try{ return JSON.parse(raw); }
+  catch{ return null; }
+}
+</script>
+</body>
+</html>
