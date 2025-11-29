@@ -80,6 +80,35 @@
       margin: 0 auto;
     }
 
+    /* People row */
+    .people{
+      background: var(--panel);
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: var(--radius);
+      padding: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .people-header{ display:flex; align-items:center; gap:8px; padding: 6px; border-bottom: 1px dashed rgba(148,163,184,0.18); }
+    .people-title{ font-weight: 800; font-size: 18px; }
+    .people-actions{ margin-left:auto; display:flex; gap:6px; }
+    .people-list{ display:flex; flex-wrap:wrap; gap:8px; padding:8px 6px; }
+    .person{
+      display:flex; align-items:center; gap:8px;
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: 12px; padding: 8px 10px;
+      background: var(--panel-2);
+      cursor: default;
+    }
+    .person.edit{ cursor: pointer; }
+    .person-name{ font-weight: 800; }
+    .person-status{ font-size: 12px; font-weight: 800; color: var(--muted); }
+    .person-meta{ font-size: 12px; color: var(--muted); }
+    .person-controls{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    .person-select{ padding:8px; border-radius:10px; border:1px solid rgba(148,163,184,0.25); background: var(--panel); font-weight:700; }
+    .person-input{ padding:8px; border-radius:10px; border:1px solid rgba(148,163,184,0.25); background: var(--panel-2); font-weight:700; }
+    .person-chip{ padding:6px 8px; border-radius:999px; border:1px solid rgba(148,163,184,0.25); background: rgba(148,163,184,0.08); font-weight:700; cursor:pointer; }
+    .person-chip:hover{ border-color: rgba(96,165,250,0.6); }
+
     .slot{
       background: var(--panel);
       border: 1px solid rgba(148,163,184,0.18);
@@ -309,6 +338,39 @@
   </div>
 </div>
 
+<!-- People edit modal -->
+<div class="modal-backdrop" id="peopleBackdrop" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2>Redigera person</h2>
+    <div class="row">
+      <div>
+        <label for="personName">Namn</label>
+        <input id="personName" placeholder="t.ex. Mamma" />
+      </div>
+      <div>
+        <label for="personStatus">Status</label>
+        <select id="personStatus">
+          <option value="here">här</option>
+          <option value="away">borta</option>
+          <option value="later">senare</option>
+        </select>
+      </div>
+      <div>
+        <label for="personWith">Med vem (valfritt)</label>
+        <input id="personWith" placeholder="t.ex. Mamma" />
+      </div>
+      <div>
+        <label for="personEta">Kommer ungefär (valfritt)</label>
+        <input id="personEta" placeholder="t.ex. 18:00" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="personCancelBtn">Avbryt</button>
+      <button class="btn primary" id="personSaveBtn">Spara</button>
+    </div>
+  </div>
+  </div>
+
 <footer>
   Lokal lagring i webbläsaren. Ingen inloggning. Inget data lämnar enheten.
 </footer>
@@ -377,6 +439,19 @@ const cancelBtn = document.getElementById("cancelBtn");
 const saveBtn = document.getElementById("saveBtn");
 const deleteBtn = document.getElementById("deleteBtn");
 
+// People modal refs
+const peopleBackdrop = document.getElementById("peopleBackdrop");
+const personWith = document.getElementById("personWith");
+const personEta = document.getElementById("personEta");
+const personName = document.getElementById("personName");
+const personStatus = document.getElementById("personStatus");
+const personCancelBtn = document.getElementById("personCancelBtn");
+const personSaveBtn = document.getElementById("personSaveBtn");
+let editingPersonId = null;
+let addingPerson = false;
+// Helper to get simple time options
+const TIME_OPTS = ["","08:00","10:00","12:00","14:00","15:00","16:00","18:00","20:00"];
+
 renderLibrary();
 render();
 
@@ -440,6 +515,37 @@ modalBackdrop.addEventListener("click", (e)=> {
   if (e.target === modalBackdrop) closeModal();
 });
 
+// People modal events
+personCancelBtn.addEventListener("click", closePeopleModal);
+peopleBackdrop.addEventListener("click", (e)=>{
+  if (e.target === peopleBackdrop) closePeopleModal();
+});
+personSaveBtn.addEventListener("click", ()=>{
+  if (!editingPersonId) return;
+  const person = (state.people || []).find(p=>p.id===editingPersonId);
+  if (addingPerson){
+    const id = crypto.randomUUID();
+    const newPerson = {
+      id,
+      name: (personName.value.trim() || "Person"),
+      status: (personStatus.value || "here"),
+      withWho: personWith.value.trim(),
+      eta: personEta.value.trim()
+    };
+    state.people = state.people || [];
+    state.people.push(newPerson);
+  } else {
+    if (!person) return;
+    person.name = personName.value.trim() || person.name;
+    person.status = personStatus.value || person.status;
+    person.withWho = personWith.value.trim();
+    person.eta = personEta.value.trim();
+  }
+  saveState();
+  closePeopleModal();
+  render();
+});
+
 saveBtn.addEventListener("click", () => {
   const text = activityText.value.trim();
   const time = activityTime.value.trim();
@@ -483,6 +589,116 @@ deleteBtn.addEventListener("click", () => {
 // ----- Rendering -----
 function render(){
   boardEl.innerHTML = "";
+  // People section first
+  const peopleEl = document.createElement("section");
+  peopleEl.className = "people";
+  const ph = document.createElement("div"); ph.className = "people-header";
+  const pt = document.createElement("div"); pt.className = "people-title"; pt.textContent = "Idag är jag med";
+  ph.appendChild(pt);
+  const pa = document.createElement("div"); pa.className = "people-actions";
+  if (editMode){
+    const addPersonBtn = document.createElement("button");
+    addPersonBtn.className = "btn blue";
+    addPersonBtn.textContent = "＋ Lägg till";
+    addPersonBtn.addEventListener("click", ()=> openPeopleAddModal());
+    pa.appendChild(addPersonBtn);
+  }
+  ph.appendChild(pa);
+  peopleEl.appendChild(ph);
+  const pl = document.createElement("div"); pl.className = "people-list";
+  for (const person of state.people || []){
+    const p = document.createElement("div");
+    p.className = "person" + (editMode ? " edit" : "");
+    p.dataset.personId = person.id;
+    if (editMode){ p.title = "Redigera med dropdowns nedan"; }
+    const nameEl = document.createElement("div"); nameEl.className = "person-name"; nameEl.textContent = person.name;
+    const statusEl = document.createElement("div"); statusEl.className = "person-status"; statusEl.textContent = statusLabel(person.status);
+    const metaEl = document.createElement("div"); metaEl.className = "person-meta";
+    const parts = [];
+    if (person.withWho) parts.push("med " + person.withWho);
+    if (person.withWhatText) parts.push(person.withWhatEmoji ? person.withWhatEmoji + " " + person.withWhatText : person.withWhatText);
+    if (person.etaStart && person.etaEnd){ parts.push("mellan " + person.etaStart + " - " + person.etaEnd); }
+    else if (person.eta){ parts.push("kommer ca " + person.eta); }
+    metaEl.textContent = parts.join(" · ");
+    p.appendChild(nameEl);
+    p.appendChild(statusEl);
+    if (parts.length) p.appendChild(metaEl);
+
+    // Inline controls (adult mode)
+    if (editMode){
+      const controls = document.createElement("div");
+      controls.className = "person-controls";
+
+      // Status select
+      const statusSel = document.createElement("select");
+      statusSel.className = "person-select";
+      for (const opt of [{v:"here",l:"✅ här"},{v:"away",l:"🚗 borta"},{v:"later",l:"⏳ senare"}]){
+        const o = document.createElement("option"); o.value = opt.v; o.textContent = opt.l; if (person.status===opt.v) o.selected = true; statusSel.appendChild(o);
+      }
+      statusSel.addEventListener("change", ()=>{ person.status = statusSel.value; saveState(); render(); });
+      controls.appendChild(statusSel);
+
+      // WithWho select + free text
+      const withSel = document.createElement("select");
+      withSel.className = "person-select";
+      const withOptions = ["Mamma","Pappa","Syskon","Kompis","Lärare","Assistent","Ingen","Annan…"];
+      for (const label of withOptions){
+        const o = document.createElement("option"); o.value = label; o.textContent = label; if (person.withWho===label) o.selected = true; withSel.appendChild(o);
+      }
+      const withInput = document.createElement("input"); withInput.className = "person-input"; withInput.placeholder = "Ange annan"; withInput.style.display = "none"; withInput.value = person.withWho && !withOptions.includes(person.withWho) ? person.withWho : "";
+      withSel.addEventListener("change", ()=>{
+        if (withSel.value === "Annan…"){
+          withInput.style.display = "inline-block";
+          person.withWho = withInput.value.trim();
+        } else {
+          withInput.style.display = "none";
+          person.withWho = withSel.value === "Ingen" ? "" : withSel.value;
+        }
+        saveState(); render();
+      });
+      withInput.addEventListener("input", ()=>{ person.withWho = withInput.value.trim(); saveState(); });
+      controls.appendChild(withSel);
+      controls.appendChild(withInput);
+
+      // Activity chip picker (e.g., Häst)
+      const actWrap = document.createElement("div"); actWrap.style.display = "flex"; actWrap.style.gap = "6px"; actWrap.style.alignItems = "center";
+      const actLabel = document.createElement("span"); actLabel.className = "person-meta"; actLabel.textContent = "aktivitet:";
+      actWrap.appendChild(actLabel);
+      const actOptions = [
+        {emoji:"🐴", text:"Häst"},
+        {emoji:"💻", text:"Dator"},
+        {emoji:"🎲", text:"Spel"},
+        {emoji:"⚽", text:"Lek ute"},
+      ];
+      for (const it of actOptions){
+        const chip = document.createElement("button"); chip.type = "button"; chip.className = "person-chip"; chip.textContent = `${it.emoji} ${it.text}`;
+        if (person.withWhatText === it.text){ chip.style.borderColor = "rgba(34,197,94,0.9)"; }
+        chip.addEventListener("click", ()=>{
+          person.withWhatEmoji = it.emoji; person.withWhatText = it.text; saveState(); render();
+        });
+        actWrap.appendChild(chip);
+      }
+      const clearAct = document.createElement("button"); clearAct.type = "button"; clearAct.className = "person-chip"; clearAct.textContent = "Rensa";
+      clearAct.addEventListener("click", ()=>{ person.withWhatEmoji = ""; person.withWhatText = ""; saveState(); render(); });
+      actWrap.appendChild(clearAct);
+      controls.appendChild(actWrap);
+
+      // ETA range: start and end
+      const etaStartSel = document.createElement("select"); etaStartSel.className = "person-select";
+      for (const t of TIME_OPTS){ const o = document.createElement("option"); o.value = t; o.textContent = t === "" ? "Start —" : t; if (person.etaStart===t) o.selected = true; etaStartSel.appendChild(o); }
+      const etaEndSel = document.createElement("select"); etaEndSel.className = "person-select";
+      for (const t of TIME_OPTS){ const o = document.createElement("option"); o.value = t; o.textContent = t === "" ? "Slut —" : t; if (person.etaEnd===t) o.selected = true; etaEndSel.appendChild(o); }
+      etaStartSel.addEventListener("change", ()=>{ person.etaStart = etaStartSel.value; saveState(); render(); });
+      etaEndSel.addEventListener("change", ()=>{ person.etaEnd = etaEndSel.value; saveState(); render(); });
+      controls.appendChild(etaStartSel);
+      controls.appendChild(etaEndSel);
+
+      p.appendChild(controls);
+    }
+    pl.appendChild(p);
+  }
+  peopleEl.appendChild(pl);
+  boardEl.appendChild(peopleEl);
   const nextId = findNextUndoneId();
 
   for (const slot of state.slots){
@@ -667,6 +883,30 @@ function closeModal(){
   editingContext = null;
 }
 
+function openPeopleModal(person){
+  editingPersonId = person.id;
+  addingPerson = false;
+  personName.value = person.name || "";
+  personStatus.value = person.status || "here";
+  personWith.value = person.withWho || "";
+  personEta.value = person.eta || "";
+  peopleBackdrop.classList.add("show");
+}
+function closePeopleModal(){
+  peopleBackdrop.classList.remove("show");
+  editingPersonId = null;
+  addingPerson = false;
+}
+function openPeopleAddModal(){
+  addingPerson = true;
+  editingPersonId = crypto.randomUUID();
+  personName.value = "";
+  personStatus.value = "here";
+  personWith.value = "";
+  personEta.value = "";
+  peopleBackdrop.classList.add("show");
+}
+
 // ----- Drag and drop -----
 let dragItemId = null;
 let dragFromSlot = null;
@@ -726,6 +966,11 @@ function makeDefaultState(){
   const today = new Date();
   const id = today.toISOString().slice(0,10);
   const slots = DEFAULT_SLOTS.map(s=>({ ...s, items: [] }));
+  const people = [
+    { id: crypto.randomUUID(), name:"Mamma", status:"here", withWho:"", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
+    { id: crypto.randomUUID(), name:"Pappa", status:"later", withWho:"Mamma", eta:"18:00", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
+    { id: crypto.randomUUID(), name:"Syskon", status:"away", withWho:"Kompis", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
+  ];
 
   // Exempel utifrån ditt schema (kan rensas av vuxen snabbt)
   const items = {};
@@ -754,7 +999,7 @@ function makeDefaultState(){
   add("evening", "Kvällsmedicin", "19:00", "💊");
   add("evening", "Sova", "20:00", "😴");
 
-  return { id, title:"Dagsplan", slots, items, version:1 };
+  return { id, title:"Dagsplan", slots, items, people, version:1 };
 }
 
 function saveState(){
@@ -766,6 +1011,16 @@ function loadState(){
   if (!raw) return null;
   try{ return JSON.parse(raw); }
   catch{ return null; }
+}
+
+// ----- People helpers -----
+function nextStatus(s){
+  return s === "here" ? "away" : s === "away" ? "later" : "here";
+}
+function statusLabel(s){
+  if (s === "here") return "✅ här";
+  if (s === "away") return "🚗 borta";
+  return "⏳ senare";
 }
 </script>
 </body>
