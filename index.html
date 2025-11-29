@@ -6,13 +6,14 @@
   <title>Bildstöd – Dagsplanerare</title>
   <style>
     :root{
-      --bg: #0f172a;
-      --panel: #111827;
-      --panel-2: #0b1220;
-      --card: #111827;
-      --card-done: #0b1b13;
-      --text: #e5e7eb;
-      --muted: #94a3b8;
+      /* Light theme colors */
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --panel-2: #fafafa;
+      --card: #ffffff;
+      --card-done: #e0ffe0;
+      --text: #111827;
+      --muted: #6b7280;
       --accent: #22c55e;
       --accent-2: #60a5fa;
       --warn: #f59e0b;
@@ -25,14 +26,14 @@
     body{
       margin:0;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: radial-gradient(1200px 800px at 10% -10%, #1f2937 0%, var(--bg) 45%, #05080f 100%);
+      background: var(--bg);
       color: var(--text);
       min-height: 100vh;
     }
 
     header{
       position: sticky; top:0; z-index:10;
-      background: linear-gradient(180deg, rgba(15,23,42,0.98), rgba(15,23,42,0.92));
+      background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(250,250,250,0.9));
       border-bottom: 1px solid rgba(148,163,184,0.15);
       padding: 10px 12px;
       display:flex; gap:8px; align-items:center; flex-wrap:wrap;
@@ -53,7 +54,7 @@
 
     .btn{
       border: 1px solid rgba(148,163,184,0.25);
-      background: rgba(17,24,39,0.9);
+      background: var(--panel);
       color: var(--text);
       padding: 10px 12px;
       border-radius: 12px;
@@ -80,11 +81,11 @@
     }
 
     .slot{
-      background: linear-gradient(180deg, rgba(17,24,39,0.95), rgba(11,18,32,0.95));
+      background: var(--panel);
       border: 1px solid rgba(148,163,184,0.18);
       border-radius: var(--radius);
       padding: 10px;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
     .slot-header{
       display:flex; align-items:center; gap:8px; flex-wrap:wrap;
@@ -111,7 +112,7 @@
     }
 
     .card{
-      background: linear-gradient(180deg, rgba(17,24,39,0.95), rgba(15,23,42,0.95));
+      background: var(--card);
       border: 2px solid rgba(148,163,184,0.18);
       border-radius: 16px;
       padding: 10px;
@@ -125,7 +126,7 @@
     .card:hover{ border-color: rgba(96,165,250,0.6); transform: translateY(-1px); }
     .card:focus-visible{ box-shadow: 0 0 0 4px var(--ring); }
     .card.done{
-      background: linear-gradient(180deg, rgba(11,27,19,0.95), rgba(9,24,16,0.95));
+      background: var(--card-done);
       border-color: rgba(34,197,94,0.6);
       opacity: 0.92;
     }
@@ -229,7 +230,7 @@
       display:grid;
       grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
       gap:8px; max-height: 260px; overflow:auto;
-      padding: 6px; background: rgba(0,0,0,0.2);
+      padding: 6px; background: var(--panel-2);
       border-radius: 12px; border: 1px solid rgba(148,163,184,0.18);
     }
     .lib-item{
@@ -338,6 +339,15 @@ const LIBRARY = [
   {emoji:"🚲", text:"Cykla"}, {emoji:"🧘", text:"Vila"}, {emoji:"📖", text:"Bok"},
   {emoji:"🛁", text:"Bada"}, {emoji:"😴", text:"Sova"}, {emoji:"💊", text:"Medicin"},
   {emoji:"🎵", text:"Musik"}, {emoji:"🤸", text:"Rörelse"}, {emoji:"🧹", text:"Städa"},
+  // Tillägg enligt önskemål
+  {emoji:"🐴", text:"Häst"},
+  {emoji:"💻", text:"Dator"},
+  {emoji:"🧑‍🤝‍🧑", text:"Kompisar"},
+  {emoji:"👧", text:"Syskon tjej"},
+  {emoji:"👦", text:"Syskon kille"},
+  {emoji:"👩", text:"Mamma"},
+  {emoji:"👨", text:"Pappa"},
+  {emoji:"👵", text:"Mormor"},
 ];
 
 const STORAGE_KEY = "bildstod_plan_v1";
