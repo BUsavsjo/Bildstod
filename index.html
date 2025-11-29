@@ -91,19 +91,25 @@
     .people-header{ display:flex; align-items:center; gap:8px; padding: 6px; border-bottom: 1px dashed rgba(148,163,184,0.18); }
     .people-title{ font-weight: 800; font-size: 18px; }
     .people-actions{ margin-left:auto; display:flex; gap:6px; }
-    .people-list{ display:flex; flex-wrap:wrap; gap:8px; padding:8px 6px; }
+    .people-list{ display:grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap:10px; padding:8px 6px; }
     .person{
-      display:flex; align-items:center; gap:8px;
-      border: 1px solid rgba(148,163,184,0.18);
-      border-radius: 12px; padding: 8px 10px;
+      display:flex; flex-direction:column; gap:8px;
+      border: 2px solid rgba(148,163,184,0.18);
+      border-radius: 16px; padding: 10px;
       background: var(--panel-2);
       cursor: default;
+      min-height: 86px;
+      position: relative;
     }
     .person.edit{ cursor: pointer; }
     .person-name{ font-weight: 800; }
     .person-status{ font-size: 12px; font-weight: 800; color: var(--muted); }
     .person-meta{ font-size: 12px; color: var(--muted); }
     .person-controls{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+      /* Calm child mode: reduce hover lift */
+      body:not(.edit-on) .card:hover{ transform:none; }
+      body:not(.edit-on) .btn:hover{ transform:none; }
+      /* More air in people list (kept via grid gap above) */
     .person-select{ padding:8px; border-radius:10px; border:1px solid rgba(148,163,184,0.25); background: var(--panel); font-weight:700; }
     .person-input{ padding:8px; border-radius:10px; border:1px solid rgba(148,163,184,0.25); background: var(--panel-2); font-weight:700; }
     .person-chip{ padding:6px 8px; border-radius:999px; border:1px solid rgba(148,163,184,0.25); background: rgba(148,163,184,0.08); font-weight:700; cursor:pointer; }
@@ -302,7 +308,7 @@
 
   <button class="btn blue" id="toggleModeBtn" aria-label="Växla vuxen/barnläge">🔒 Lås upp (vuxenläge)</button>
   <button class="btn" id="toggleTimesBtn" aria-label="Visa eller dölj tider">🕒 Visa tider</button>
-  <button class="btn warn" id="resetDoneBtn" aria-label="Nollställ klarmarkeringar">↺ Nollställ Klar</button>
+  <button class="btn warn" id="resetDoneBtn" aria-label="Nollställ klarmarkeringar och rensa kort">↺ Nollställ & Rensa</button>
   <button class="btn" id="exportBtn" aria-label="Exportera dag som fil">⬇️ Exportera</button>
   <label class="btn" for="importInput" style="cursor:pointer;">⬆️ Importera</label>
   <input id="importInput" type="file" accept="application/json" style="display:none;" />
@@ -338,38 +344,7 @@
   </div>
 </div>
 
-<!-- People edit modal -->
-<div class="modal-backdrop" id="peopleBackdrop" role="dialog" aria-modal="true">
-  <div class="modal">
-    <h2>Redigera person</h2>
-    <div class="row">
-      <div>
-        <label for="personName">Namn</label>
-        <input id="personName" placeholder="t.ex. Mamma" />
-      </div>
-      <div>
-        <label for="personStatus">Status</label>
-        <select id="personStatus">
-          <option value="here">här</option>
-          <option value="away">borta</option>
-          <option value="later">senare</option>
-        </select>
-      </div>
-      <div>
-        <label for="personWith">Med vem (valfritt)</label>
-        <input id="personWith" placeholder="t.ex. Mamma" />
-      </div>
-      <div>
-        <label for="personEta">Kommer ungefär (valfritt)</label>
-        <input id="personEta" placeholder="t.ex. 18:00" />
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" id="personCancelBtn">Avbryt</button>
-      <button class="btn primary" id="personSaveBtn">Spara</button>
-    </div>
-  </div>
-  </div>
+<!-- (people modal borttagen – inline-redigering används) -->
 
 <footer>
   Lokal lagring i webbläsaren. Ingen inloggning. Inget data lämnar enheten.
@@ -414,6 +389,16 @@ const LIBRARY = [
 
 const STORAGE_KEY = "bildstod_plan_v1";
 
+// Safe UUID helper (fallback if crypto.randomUUID is unavailable)
+function safeUUID(){
+  try{
+    if (window.crypto && typeof window.crypto.randomUUID === 'function'){
+      return window.crypto.randomUUID();
+    }
+  }catch(e){}
+  return 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
 // ----- State -----
 let state = loadState() || makeDefaultState();
 let editMode = false;       // Barnläge default
@@ -439,15 +424,8 @@ const cancelBtn = document.getElementById("cancelBtn");
 const saveBtn = document.getElementById("saveBtn");
 const deleteBtn = document.getElementById("deleteBtn");
 
-// People modal refs
-const peopleBackdrop = document.getElementById("peopleBackdrop");
-const personWith = document.getElementById("personWith");
-const personEta = document.getElementById("personEta");
-const personName = document.getElementById("personName");
-const personStatus = document.getElementById("personStatus");
-const personCancelBtn = document.getElementById("personCancelBtn");
-const personSaveBtn = document.getElementById("personSaveBtn");
-let editingPersonId = null;
+// People (inline only)
+let editingPersonId = null; // not used for modal anymore
 let addingPerson = false;
 // Helper to get simple time options
 const TIME_OPTS = ["","08:00","10:00","12:00","14:00","15:00","16:00","18:00","20:00"];
@@ -470,11 +448,18 @@ toggleTimesBtn.addEventListener("click", () => {
 });
 
 resetDoneBtn.addEventListener("click", () => {
+  if (!confirm("Nollställa KLAR och rensa alla kort?")) return;
+  // Clear done flags first (for safety if items remain)
   for (const slot of state.slots){
     for (const id of slot.items){
       state.items[id].done = false;
     }
   }
+  // Then clear all cards
+  for (const slot of state.slots){
+    slot.items = [];
+  }
+  state.items = {};
   saveState();
   render();
 });
@@ -515,36 +500,7 @@ modalBackdrop.addEventListener("click", (e)=> {
   if (e.target === modalBackdrop) closeModal();
 });
 
-// People modal events
-personCancelBtn.addEventListener("click", closePeopleModal);
-peopleBackdrop.addEventListener("click", (e)=>{
-  if (e.target === peopleBackdrop) closePeopleModal();
-});
-personSaveBtn.addEventListener("click", ()=>{
-  if (!editingPersonId) return;
-  const person = (state.people || []).find(p=>p.id===editingPersonId);
-  if (addingPerson){
-    const id = crypto.randomUUID();
-    const newPerson = {
-      id,
-      name: (personName.value.trim() || "Person"),
-      status: (personStatus.value || "here"),
-      withWho: personWith.value.trim(),
-      eta: personEta.value.trim()
-    };
-    state.people = state.people || [];
-    state.people.push(newPerson);
-  } else {
-    if (!person) return;
-    person.name = personName.value.trim() || person.name;
-    person.status = personStatus.value || person.status;
-    person.withWho = personWith.value.trim();
-    person.eta = personEta.value.trim();
-  }
-  saveState();
-  closePeopleModal();
-  render();
-});
+// (modal events borttagna)
 
 saveBtn.addEventListener("click", () => {
   const text = activityText.value.trim();
@@ -564,7 +520,7 @@ saveBtn.addEventListener("click", () => {
     item.emoji = emoji;
   } else if (editingContext?.slotKey){
     // Add new
-    const id = crypto.randomUUID();
+    const id = safeUUID();
     state.items[id] = { id, text, time, emoji, done:false };
     const slot = state.slots.find(s=>s.key===editingContext.slotKey);
     slot.items.push(id);
@@ -610,8 +566,34 @@ function render(){
     const p = document.createElement("div");
     p.className = "person" + (editMode ? " edit" : "");
     p.dataset.personId = person.id;
-    if (editMode){ p.title = "Redigera med dropdowns nedan"; }
+    if (editMode){ p.title = "Redigera med kontroller"; }
     const nameEl = document.createElement("div"); nameEl.className = "person-name"; nameEl.textContent = person.name;
+    // Inline delete icon on person card (edit mode)
+    if (editMode){
+      const delIcon = document.createElement("button");
+      delIcon.type = "button";
+      delIcon.className = "btn danger";
+      delIcon.style.position = "absolute";
+      delIcon.style.top = "6px";
+      delIcon.style.left = "6px";
+      delIcon.style.padding = "4px 6px";
+      delIcon.style.fontSize = "12px";
+      delIcon.textContent = "🗑️";
+      delIcon.title = "Ta bort person";
+      delIcon.addEventListener("click", (e)=>{
+        e.stopPropagation();
+        if (!confirm(`Ta bort ${person.name}?`)) return;
+        if (!person.id){
+          const idx = (state.people || []).indexOf(person);
+          if (idx >= 0){ (state.people || []).splice(idx,1); }
+        } else {
+          state.people = (state.people || []).filter(p=>p.id!==person.id);
+        }
+        saveState();
+        render();
+      });
+      p.appendChild(delIcon);
+    }
     const statusEl = document.createElement("div"); statusEl.className = "person-status"; statusEl.textContent = statusLabel(person.status);
     const metaEl = document.createElement("div"); metaEl.className = "person-meta";
     const parts = [];
@@ -643,15 +625,21 @@ function render(){
       withSel.className = "person-select";
       const withOptions = ["Mamma","Pappa","Syskon","Kompis","Lärare","Assistent","Ingen","Annan…"];
       for (const label of withOptions){
-        const o = document.createElement("option"); o.value = label; o.textContent = label; if (person.withWho===label) o.selected = true; withSel.appendChild(o);
+        const o = document.createElement("option"); o.value = label; o.textContent = label; withSel.appendChild(o);
       }
-      const withInput = document.createElement("input"); withInput.className = "person-input"; withInput.placeholder = "Ange annan"; withInput.style.display = "none"; withInput.value = person.withWho && !withOptions.includes(person.withWho) ? person.withWho : "";
+      // Stable custom logic
+      person.withCustom = person.withCustom === true || (person.withWho && !withOptions.includes(person.withWho));
+      const withInput = document.createElement("input"); withInput.className = "person-input"; withInput.placeholder = "Ange annan"; withInput.style.display = person.withCustom ? "inline-block" : "none"; withInput.value = person.withCustom ? (person.withWho || "") : "";
+      // Select initial value
+      withSel.value = person.withCustom ? "Annan…" : (person.withWho || "Mamma");
       withSel.addEventListener("change", ()=>{
         if (withSel.value === "Annan…"){
           withInput.style.display = "inline-block";
+          person.withCustom = true;
           person.withWho = withInput.value.trim();
         } else {
           withInput.style.display = "none";
+          person.withCustom = false;
           person.withWho = withSel.value === "Ingen" ? "" : withSel.value;
         }
         saveState(); render();
@@ -660,28 +648,23 @@ function render(){
       controls.appendChild(withSel);
       controls.appendChild(withInput);
 
-      // Activity chip picker (e.g., Häst)
-      const actWrap = document.createElement("div"); actWrap.style.display = "flex"; actWrap.style.gap = "6px"; actWrap.style.alignItems = "center";
+      // Activity dropdown + image picker under
       const actLabel = document.createElement("span"); actLabel.className = "person-meta"; actLabel.textContent = "aktivitet:";
-      actWrap.appendChild(actLabel);
-      const actOptions = [
-        {emoji:"🐴", text:"Häst"},
-        {emoji:"💻", text:"Dator"},
-        {emoji:"🎲", text:"Spel"},
-        {emoji:"⚽", text:"Lek ute"},
-      ];
-      for (const it of actOptions){
-        const chip = document.createElement("button"); chip.type = "button"; chip.className = "person-chip"; chip.textContent = `${it.emoji} ${it.text}`;
-        if (person.withWhatText === it.text){ chip.style.borderColor = "rgba(34,197,94,0.9)"; }
-        chip.addEventListener("click", ()=>{
-          person.withWhatEmoji = it.emoji; person.withWhatText = it.text; saveState(); render();
-        });
-        actWrap.appendChild(chip);
+      controls.appendChild(actLabel);
+      const actSelect = document.createElement("select"); actSelect.className = "person-select";
+      const actNone = document.createElement("option"); actNone.value = ""; actNone.textContent = "—"; actSelect.appendChild(actNone);
+      const libSimple = LIBRARY.filter(it => ["Häst","Dator","Spel","Lek ute","Ute","Cykla","Musik","Skola"].includes(it.text));
+      for (const it of libSimple){
+        const o = document.createElement("option"); o.value = it.text; o.textContent = `${it.emoji} ${it.text}`; actSelect.appendChild(o);
       }
-      const clearAct = document.createElement("button"); clearAct.type = "button"; clearAct.className = "person-chip"; clearAct.textContent = "Rensa";
-      clearAct.addEventListener("click", ()=>{ person.withWhatEmoji = ""; person.withWhatText = ""; saveState(); render(); });
-      actWrap.appendChild(clearAct);
-      controls.appendChild(actWrap);
+      actSelect.value = person.withWhatText || "";
+      actSelect.addEventListener("change", ()=>{
+        const chosen = libSimple.find(x=>x.text===actSelect.value);
+        if (chosen){ person.withWhatEmoji = chosen.emoji; person.withWhatText = chosen.text; }
+        else { person.withWhatEmoji = ""; person.withWhatText = ""; }
+        saveState(); render();
+      });
+      controls.appendChild(actSelect);
 
       // ETA range: start and end
       const etaStartSel = document.createElement("select"); etaStartSel.className = "person-select";
@@ -692,6 +675,24 @@ function render(){
       etaEndSel.addEventListener("change", ()=>{ person.etaEnd = etaEndSel.value; saveState(); render(); });
       controls.appendChild(etaStartSel);
       controls.appendChild(etaEndSel);
+
+      // Delete person
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn danger";
+      delBtn.textContent = "🗑️ Ta bort";
+      delBtn.addEventListener("click", ()=>{
+        if (!confirm(`Ta bort ${person.name}?`)) return;
+        if (!person.id){
+          const idx = (state.people || []).indexOf(person);
+          if (idx >= 0){ (state.people || []).splice(idx,1); }
+        } else {
+          state.people = (state.people || []).filter(p=>p.id!==person.id);
+        }
+        saveState();
+        render();
+      });
+      controls.appendChild(delBtn);
 
       p.appendChild(controls);
     }
@@ -797,6 +798,29 @@ function render(){
       handle.className = "drag-handle";
       handle.textContent = "↕ dra";
 
+      // Inline delete button in edit mode
+      if (editMode){
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "btn danger";
+        del.style.position = "absolute";
+        del.style.top = "6px";
+        del.style.left = "6px";
+        del.style.padding = "4px 6px";
+        del.style.fontSize = "12px";
+        del.textContent = "🗑️";
+        del.title = "Ta bort aktivitet";
+        del.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          const s = state.slots.find(s=>s.key===slot.key);
+          s.items = s.items.filter(x=>x!==id);
+          delete state.items[id];
+          saveState();
+          render();
+        });
+        card.appendChild(del);
+      }
+
       card.appendChild(icon);
       card.appendChild(txt);
       if (badge.textContent) card.appendChild(badge);
@@ -883,28 +907,15 @@ function closeModal(){
   editingContext = null;
 }
 
-function openPeopleModal(person){
-  editingPersonId = person.id;
-  addingPerson = false;
-  personName.value = person.name || "";
-  personStatus.value = person.status || "here";
-  personWith.value = person.withWho || "";
-  personEta.value = person.eta || "";
-  peopleBackdrop.classList.add("show");
-}
-function closePeopleModal(){
-  peopleBackdrop.classList.remove("show");
-  editingPersonId = null;
-  addingPerson = false;
-}
+// Add person (inline create)
 function openPeopleAddModal(){
-  addingPerson = true;
-  editingPersonId = crypto.randomUUID();
-  personName.value = "";
-  personStatus.value = "here";
-  personWith.value = "";
-  personEta.value = "";
-  peopleBackdrop.classList.add("show");
+  // create minimal new person and push
+  const id = safeUUID();
+  const newPerson = { id, name:"Person", status:"here", withWho:"", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"", withCustom:false };
+  state.people = state.people || [];
+  state.people.push(newPerson);
+  saveState();
+  render();
 }
 
 // ----- Drag and drop -----
@@ -967,15 +978,15 @@ function makeDefaultState(){
   const id = today.toISOString().slice(0,10);
   const slots = DEFAULT_SLOTS.map(s=>({ ...s, items: [] }));
   const people = [
-    { id: crypto.randomUUID(), name:"Mamma", status:"here", withWho:"", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
-    { id: crypto.randomUUID(), name:"Pappa", status:"later", withWho:"Mamma", eta:"18:00", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
-    { id: crypto.randomUUID(), name:"Syskon", status:"away", withWho:"Kompis", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
+    { id: safeUUID(), name:"Mamma", status:"here", withWho:"", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
+    { id: safeUUID(), name:"Pappa", status:"later", withWho:"Mamma", eta:"18:00", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
+    { id: safeUUID(), name:"Syskon", status:"away", withWho:"Kompis", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
   ];
 
   // Exempel utifrån ditt schema (kan rensas av vuxen snabbt)
   const items = {};
   function add(slotKey, text, time, emoji){
-    const id = crypto.randomUUID();
+    const id = safeUUID();
     items[id] = {id, text, time, emoji, done:false};
     slots.find(s=>s.key===slotKey).items.push(id);
   }
@@ -1014,9 +1025,7 @@ function loadState(){
 }
 
 // ----- People helpers -----
-function nextStatus(s){
-  return s === "here" ? "away" : s === "away" ? "later" : "here";
-}
+// nextStatus borttagen (dropdown-only)
 function statusLabel(s){
   if (s === "here") return "✅ här";
   if (s === "away") return "🚗 borta";
