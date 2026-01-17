@@ -11,12 +11,16 @@ Ett litet, fristående (frontend‑only) verktyg för att göra en överskådlig
 - Fördefinierade tidsblock: Morgon, Förmiddag, Lunch, Eftermiddag, Kväll.
 - Aktivitetskort med emoji, kort text och (valfri) tid.
 - Markering av nästa ej klara aktivitet (badge "NU").
+- **Deltagare på aktiviteter** – välj vem som är med på varje aktivitet; visas på kortet i barnläge.
+- **Analog klocka** – toggle mellan digital och SVG-baserad analog klocka för barn som inte kan läsa digital tid.
+- **Personsektionen "Dagens människor"** – visa familjemedlemmarnas status (här/borta/senare), aktivitet och tider. Barnet ser snabbt vem som är tillgänglig just nu.
+- **Redigera personnamn direkt** – snabb inline-redigering av namn för varje familjemedlem.
 - Enkel toggling barnläge / vuxenläge (låst / upplåst redigering).
 - Lägg till, ändra, ta bort aktiviteter via modal.
 - Dra och släpp (i vuxenläge) för att flytta eller omordna aktiviteter.
 - Export / import av dagsplan som JSON-fil.
 - Nollställning av alla "KLAR" statusar.
-- Bibliotek av vanliga aktiviteter + nya tillagda (Häst, Dator, Kompisar, Syskon tjej, Syskon kille, Mamma, Pappa, Mormor).
+- Bibliotek av vanliga aktiviteter + nya tillagda (Häst, Dator, Jobbar, Kompisar, Syskon tjej, Syskon kille, Mamma, Pappa, Mormor).
 - Ljust tema (vit bakgrund, enhetligt gränssnitt).
 
 ## Teknisk översikt
@@ -26,6 +30,7 @@ Projektet består av en enda fil: `index.html` som innehåller:
 - State-hantering i ett objekt `state` som lagras i `localStorage` med nyckeln `bildstod_plan_v1`.
 - Generering av kort och slots sker dynamiskt vid varje `render()`.
 - Modalhantering och drag‑och‑släpp implementerat med native events.
+- **Personsektionen** ("Dagens människor") visar familjemedlemmar med status, aktivitet och tider för att ge barnet överblick över familjedynamiken.
 
 ## Datastruktur
 ```jsonc
@@ -36,8 +41,18 @@ state = {
     { key, label, hint, items: [itemId, ...] }, ...
   ],
   items: {                  // uppslag av aktiviteter
-    itemId: { id, text, time, emoji, done }
+    itemId: { 
+      id, text, time, emoji, done, 
+      participants: [personId, ...]  // lista över deltagare (ny)
+    }
   },
+  people: [                 // familjemedlemmar (ny)
+    { 
+      id, name, status, eta, 
+      withWhatEmoji, withWhatText,  // personens aktivitet
+      etaStart, etaEnd               // ankomst/avresetider
+    }, ...
+  ],
   version: 1
 }
 ```
@@ -49,10 +64,16 @@ state = {
    - Lägga till aktiviteter ("＋ Lägg till").
    - Klicka kort för att redigera eller ta bort.
    - Dra kort mellan tidsblock.
-4. "Visa tider" / "Dölj tider" växlar visning av tidsfält.
-5. "Nollställ Klar" tar bort alla klarmarkeringar.
-6. "Exportera" sparar nuvarande plan som JSON-fil.
-7. "Importera" läser tidigare sparad plan och ersätter den aktuella.
+   - Redigera familjemedlemmar: namn, status (här/borta/senare), aktivitet, tider.
+4. "Visa tider" / "Dölj tider" växlar visning av tidsfält på kortet.
+5. **"Analog klocka"** (visas när tider är påslagna) – växla mellan digital tid och SVG-baserad analog klocka.
+   - Användbar för barn som inte kan läsa "HH:MM" format.
+   - Timvisare och minutvisare visas tydligt.
+6. **Välj deltagare** – vid läggning eller redigering av aktivitet, bocka av vem som är med (t.ex. Mamma, Pappa).
+   - Deltagare visas på kortet under tiden i barnläge.
+7. "Nollställ Klar" tar bort alla klarmarkeringar.
+8. "Exportera" sparar nuvarande plan som JSON-fil.
+9. "Importera" läser tidigare sparad plan och ersätter den aktuella.
 
 ## Tillgänglighet / UX
 - Stora klickytor (64–72px ikon, kort > 86px höjd).
@@ -77,6 +98,9 @@ state = {
 - Ingen automatisk tidslogik eller påminnelser.
 
 ## Förslag på vidareutveckling
+- ✅ **Deltagare på aktiviteter** (implementerad)
+- ✅ **Analog klocka** (implementerad)
+- ✅ **Redigera personnamn** (implementerad)
 - Mörkt/ljust temaväxling (toggle) med `prefers-color-scheme` stöd.
 - Möjlighet till kopiering av gårdagens plan med snabb rensning.
 - Kategorier / filter för biblioteket.
@@ -87,7 +111,9 @@ state = {
 
 ## Felsökning
 - Om sidan verkar "fast": Öppna webbläsarens utvecklingsverktyg och rensa `localStorage` för nyckeln `bildstod_plan_v1`.
-- Om importerad fil inte laddas: kontrollera att JSON inkluderar fälten `slots` och `items`.
+- Om importerad fil inte laddas: kontrollera att JSON inkluderar fälten `slots`, `items` (med `participants`), och `people`.
+- Om analog klocka inte visas: se till att "Visa tider" är påslaget i barnläge, och att aktiviteten har ett giltigt tid-format (t.ex. "09:30" eller "10:00–11:00").
+- Analog klocka sparas mellan sessioner – inställningen återställs bara om `localStorage` rensas.
 
 ## Snabbstart (Windows PowerShell)
 ```powershell
@@ -98,7 +124,7 @@ start index.html
 ```
 
 ## Licens
-Ingen explicit licens angiven. Lägg till vid behov (t.ex. MIT) innan publicering om andra ska återanvända koden.
+MIT – se `LICENSE`-filen. Lägg gärna till detta projekt till dina egna projekt eller dela med andra.
 
 ---
 ### English (brief)

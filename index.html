@@ -308,6 +308,7 @@
 
   <button class="btn blue" id="toggleModeBtn" aria-label="Växla vuxen/barnläge">🔒 Lås upp (vuxenläge)</button>
   <button class="btn" id="toggleTimesBtn" aria-label="Visa eller dölj tider">🕒 Visa tider</button>
+  <button class="btn" id="toggleClockBtn" aria-label="Växla mellan analog och digital klocka" style="display:none;">🕐 Analog klocka</button>
   <button class="btn warn" id="resetDoneBtn" aria-label="Nollställ klarmarkeringar och rensa kort">↺ Nollställ & Rensa</button>
   <button class="btn" id="exportBtn" aria-label="Exportera dag som fil">⬇️ Exportera</button>
   <label class="btn" for="importInput" style="cursor:pointer;">⬆️ Importera</label>
@@ -335,6 +336,9 @@
     <div class="library" id="library"></div>
 
     <input id="activityEmoji" type="hidden" />
+
+    <label>Vem är med? (valfritt)</label>
+    <div id="participantsSection" style="display:flex; flex-wrap:wrap; gap:6px; padding:6px 0;"></div>
 
     <div class="modal-actions">
       <button class="btn" id="cancelBtn">Avbryt</button>
@@ -379,6 +383,7 @@ const LIBRARY = [
   // Tillägg enligt önskemål
   {emoji:"🐴", text:"Häst"},
   {emoji:"💻", text:"Dator"},
+  {emoji:"💼", text:"Jobbar"},
   {emoji:"🧑‍🤝‍🧑", text:"Kompisar"},
   {emoji:"👧", text:"Syskon tjej"},
   {emoji:"👦", text:"Syskon kille"},
@@ -400,16 +405,20 @@ function safeUUID(){
 }
 
 // ----- State -----
+// Huvudapplikationens state-objekt: slots, items, people.
+// Migreras automatiskt från äldre versioner via loadState() för bakåtkompatibilitet.
 let state = loadState() || makeDefaultState();
-let editMode = false;       // Barnläge default
-let showTimes = false;
-let editingContext = null;  // {slotKey, itemId}
+let editMode = false;       // Barnläge default; om true = vuxenläge
+let showTimes = false;      // Visa tider på aktivitetskort
+let showAnalogClock = loadClockPreference(); // Analog/digital klockläge (sparas i localStorage)
+let editingContext = null;  // {slotKey, itemId} för modal-kontext
 
 // ----- Init -----
 const boardEl = document.getElementById("board");
 const modePill = document.getElementById("modePill");
 const toggleModeBtn = document.getElementById("toggleModeBtn");
 const toggleTimesBtn = document.getElementById("toggleTimesBtn");
+const toggleClockBtn = document.getElementById("toggleClockBtn");
 const resetDoneBtn = document.getElementById("resetDoneBtn");
 const exportBtn = document.getElementById("exportBtn");
 const importInput = document.getElementById("importInput");
@@ -420,6 +429,7 @@ const activityText = document.getElementById("activityText");
 const activityTime = document.getElementById("activityTime");
 const activityEmoji = document.getElementById("activityEmoji");
 const libraryEl = document.getElementById("library");
+const participantsSection = document.getElementById("participantsSection");
 const cancelBtn = document.getElementById("cancelBtn");
 const saveBtn = document.getElementById("saveBtn");
 const deleteBtn = document.getElementById("deleteBtn");
@@ -433,6 +443,10 @@ const TIME_OPTS = ["","08:00","10:00","12:00","14:00","15:00","16:00","18:00","2
 renderLibrary();
 render();
 
+// Initialize toggle button texts
+toggleClockBtn.textContent = showAnalogClock ? "🕐 Digital klocka" : "🕐 Analog klocka";
+toggleClockBtn.style.display = showTimes ? "inline-flex" : "none";
+
 toggleModeBtn.addEventListener("click", () => {
   editMode = !editMode;
   modePill.textContent = editMode ? "Vuxenläge" : "Barnläge";
@@ -444,6 +458,14 @@ toggleModeBtn.addEventListener("click", () => {
 toggleTimesBtn.addEventListener("click", () => {
   showTimes = !showTimes;
   toggleTimesBtn.textContent = showTimes ? "🕒 Dölj tider" : "🕒 Visa tider";
+    toggleClockBtn.style.display = showTimes ? "inline-flex" : "none";
+  render();
+});
+
+toggleClockBtn.addEventListener("click", () => {
+  showAnalogClock = !showAnalogClock;
+  toggleClockBtn.textContent = showAnalogClock ? "🕐 Digital klocka" : "🕐 Analog klocka";
+  saveClockPreference(showAnalogClock);
   render();
 });
 
@@ -506,6 +528,11 @@ saveBtn.addEventListener("click", () => {
   const text = activityText.value.trim();
   const time = activityTime.value.trim();
   const emoji = activityEmoji.value || "🟦";
+  
+  // Collect selected participants
+  const selectedParticipants = [];
+  const checkboxes = participantsSection.querySelectorAll("input[type='checkbox']:checked");
+  checkboxes.forEach(cb => selectedParticipants.push(cb.value));
 
   if (!text){
     activityText.focus();
@@ -518,10 +545,11 @@ saveBtn.addEventListener("click", () => {
     item.text = text;
     item.time = time;
     item.emoji = emoji;
+    item.participants = selectedParticipants;
   } else if (editingContext?.slotKey){
     // Add new
     const id = safeUUID();
-    state.items[id] = { id, text, time, emoji, done:false };
+    state.items[id] = { id, text, time, emoji, done:false, participants:selectedParticipants };
     const slot = state.slots.find(s=>s.key===editingContext.slotKey);
     slot.items.push(id);
   }
@@ -545,11 +573,12 @@ deleteBtn.addEventListener("click", () => {
 // ----- Rendering -----
 function render(){
   boardEl.innerHTML = "";
-  // People section first
+  // Personsektionen: "Dagens människor" – visar familjemedlemmar med status, aktiviteter och tider
+  // Hjälper barnet att förstå vem som är tillgänglig just nu (här/borta/senare)
   const peopleEl = document.createElement("section");
   peopleEl.className = "people";
   const ph = document.createElement("div"); ph.className = "people-header";
-  const pt = document.createElement("div"); pt.className = "people-title"; pt.textContent = "Idag är jag med";
+  const pt = document.createElement("div"); pt.className = "people-title"; pt.textContent = "Dagens människor";
   ph.appendChild(pt);
   const pa = document.createElement("div"); pa.className = "people-actions";
   if (editMode){
@@ -597,7 +626,6 @@ function render(){
     const statusEl = document.createElement("div"); statusEl.className = "person-status"; statusEl.textContent = statusLabel(person.status);
     const metaEl = document.createElement("div"); metaEl.className = "person-meta";
     const parts = [];
-    if (person.withWho) parts.push("med " + person.withWho);
     if (person.withWhatText) parts.push(person.withWhatEmoji ? person.withWhatEmoji + " " + person.withWhatText : person.withWhatText);
     if (person.etaStart && person.etaEnd){ parts.push("mellan " + person.etaStart + " - " + person.etaEnd); }
     else if (person.eta){ parts.push("kommer ca " + person.eta); }
@@ -611,6 +639,22 @@ function render(){
       const controls = document.createElement("div");
       controls.className = "person-controls";
 
+      // Inline edit för personnamn (snabb uppdatering utan modal)
+      const nameLabel = document.createElement("span");
+      nameLabel.className = "person-meta";
+      nameLabel.textContent = "Namn:";
+      controls.appendChild(nameLabel);
+      
+      const nameInput = document.createElement("input");
+      nameInput.className = "person-input";
+      nameInput.placeholder = "Skriv namn";
+      nameInput.value = person.name || "";
+      nameInput.addEventListener("input", ()=>{
+        person.name = nameInput.value.trim();
+        saveState();
+      });
+      controls.appendChild(nameInput);
+
       // Status select
       const statusSel = document.createElement("select");
       statusSel.className = "person-select";
@@ -620,40 +664,12 @@ function render(){
       statusSel.addEventListener("change", ()=>{ person.status = statusSel.value; saveState(); render(); });
       controls.appendChild(statusSel);
 
-      // WithWho select + free text
-      const withSel = document.createElement("select");
-      withSel.className = "person-select";
-      const withOptions = ["Mamma","Pappa","Syskon","Kompis","Lärare","Assistent","Ingen","Annan…"];
-      for (const label of withOptions){
-        const o = document.createElement("option"); o.value = label; o.textContent = label; withSel.appendChild(o);
-      }
-      // Stable custom logic
-      person.withCustom = person.withCustom === true || (person.withWho && !withOptions.includes(person.withWho));
-      const withInput = document.createElement("input"); withInput.className = "person-input"; withInput.placeholder = "Ange annan"; withInput.style.display = person.withCustom ? "inline-block" : "none"; withInput.value = person.withCustom ? (person.withWho || "") : "";
-      // Select initial value
-      withSel.value = person.withCustom ? "Annan…" : (person.withWho || "Mamma");
-      withSel.addEventListener("change", ()=>{
-        if (withSel.value === "Annan…"){
-          withInput.style.display = "inline-block";
-          person.withCustom = true;
-          person.withWho = withInput.value.trim();
-        } else {
-          withInput.style.display = "none";
-          person.withCustom = false;
-          person.withWho = withSel.value === "Ingen" ? "" : withSel.value;
-        }
-        saveState(); render();
-      });
-      withInput.addEventListener("input", ()=>{ person.withWho = withInput.value.trim(); saveState(); });
-      controls.appendChild(withSel);
-      controls.appendChild(withInput);
-
-      // Activity dropdown + image picker under
-      const actLabel = document.createElement("span"); actLabel.className = "person-meta"; actLabel.textContent = "aktivitet:";
+      // Activity dropdown
+      const actLabel = document.createElement("span"); actLabel.className = "person-meta"; actLabel.textContent = "Gör:";
       controls.appendChild(actLabel);
       const actSelect = document.createElement("select"); actSelect.className = "person-select";
       const actNone = document.createElement("option"); actNone.value = ""; actNone.textContent = "—"; actSelect.appendChild(actNone);
-      const libSimple = LIBRARY.filter(it => ["Häst","Dator","Spel","Lek ute","Ute","Cykla","Musik","Skola"].includes(it.text));
+      const libSimple = LIBRARY.filter(it => ["Häst","Dator","Spel","Lek ute","Ute","Cykla","Musik","Skola","Jobbar"].includes(it.text));
       for (const it of libSimple){
         const o = document.createElement("option"); o.value = it.text; o.textContent = `${it.emoji} ${it.text}`; actSelect.appendChild(o);
       }
@@ -783,11 +799,66 @@ function render(){
 
       txt.appendChild(label);
 
+      // Tidvisning: analog SVG-klocka eller bara digital text
       if (showTimes && item.time){
-        const timeEl = document.createElement("div");
-        timeEl.className = "time";
-        timeEl.textContent = item.time;
-        txt.appendChild(timeEl);
+        if (showAnalogClock) {
+          // Show analog clock
+          const clockContainer = document.createElement("div");
+          clockContainer.style.display = "flex";
+          clockContainer.style.flexDirection = "column";
+          clockContainer.style.alignItems = "center";
+          clockContainer.style.gap = "4px";
+          clockContainer.style.marginTop = "4px";
+          
+          const clock = renderAnalogClock(item.time);
+          if (clock) {
+            clockContainer.appendChild(clock);
+            
+            // Also show digital time as text below
+            const timeText = document.createElement("div");
+            timeText.className = "time";
+            timeText.style.fontSize = "11px";
+            timeText.textContent = item.time;
+            clockContainer.appendChild(timeText);
+            
+            txt.appendChild(clockContainer);
+          } else {
+            // Fallback if time can't be parsed
+            const timeEl = document.createElement("div");
+            timeEl.className = "time";
+            timeEl.textContent = item.time;
+            txt.appendChild(timeEl);
+          }
+        } else {
+          // Show digital time only
+          const timeEl = document.createElement("div");
+          timeEl.className = "time";
+          timeEl.textContent = item.time;
+          txt.appendChild(timeEl);
+        }
+      }
+
+      // Visa deltagare på kortet (under tiden, i barnläge)
+      // Från item.participants[] hämtar vi personnamn och visar som chips
+      if (item.participants && item.participants.length > 0){
+        const participantsEl = document.createElement("div");
+        participantsEl.className = "time"; // Reuse time styling
+        participantsEl.style.display = "flex";
+        participantsEl.style.gap = "4px";
+        participantsEl.style.alignItems = "center";
+        participantsEl.style.flexWrap = "wrap";
+        
+        for (const personId of item.participants){
+          const person = (state.people || []).find(p => p.id === personId);
+          if (person){
+            const chip = document.createElement("span");
+            chip.style.fontSize = "12px";
+            chip.style.fontWeight = "700";
+            chip.textContent = person.name;
+            participantsEl.appendChild(chip);
+          }
+        }
+        txt.appendChild(participantsEl);
       }
 
       const badge = document.createElement("div");
@@ -876,6 +947,40 @@ function highlightLibrary(emoji){
   }
 }
 
+// Rendera deltagarcheckboxar i modal för aktivitetsredigering
+// Baseras på state.people[] och visar redan valda deltagare som checked
+function renderParticipants(selectedIds = []){
+  participantsSection.innerHTML = "";
+  const people = state.people || [];
+  if (people.length === 0){
+    participantsSection.innerHTML = "<span style='color:var(--muted); font-size:12px;'>Inga personer tillagda ännu</span>";
+    return;
+  }
+  
+  for (const person of people){
+    const label = document.createElement("label");
+    label.style.display = "flex";
+    label.style.alignItems = "center";
+    label.style.gap = "4px";
+    label.style.padding = "6px 10px";
+    label.style.borderRadius = "999px";
+    label.style.border = "1px solid rgba(148,163,184,0.25)";
+    label.style.background = "rgba(148,163,184,0.08)";
+    label.style.cursor = "pointer";
+    label.style.fontSize = "14px";
+    label.style.fontWeight = "700";
+    
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = person.id;
+    checkbox.checked = selectedIds.includes(person.id);
+    
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(person.name));
+    participantsSection.appendChild(label);
+  }
+}
+
 // ----- Modal helpers -----
 function openAddModal(slotKey){
   editingContext = {slotKey, itemId:null};
@@ -884,6 +989,7 @@ function openAddModal(slotKey){
   activityTime.value = "";
   activityEmoji.value = "";
   highlightLibrary(null);
+  renderParticipants([]);
   deleteBtn.style.display = "none";
   modalBackdrop.classList.add("show");
   activityText.focus();
@@ -897,6 +1003,7 @@ function openEditModal(slotKey, itemId){
   activityTime.value = item.time || "";
   activityEmoji.value = item.emoji || "";
   highlightLibrary(item.emoji);
+  renderParticipants(item.participants || []);
   deleteBtn.style.display = "inline-flex";
   modalBackdrop.classList.add("show");
   activityText.focus();
@@ -911,7 +1018,7 @@ function closeModal(){
 function openPeopleAddModal(){
   // create minimal new person and push
   const id = safeUUID();
-  const newPerson = { id, name:"Person", status:"here", withWho:"", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"", withCustom:false };
+  const newPerson = { id, name:"Person", status:"here", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" };
   state.people = state.people || [];
   state.people.push(newPerson);
   saveState();
@@ -964,6 +1071,109 @@ function onDrop(e){
 }
 
 // ----- Logic helpers -----
+// parseTime: Parsa tid från sträng (t.ex. "09:30" eller "10:00–11:00")
+// För intervall extraheras första tiden. Returnerar {hours, minutes}.
+function parseTime(timeString) {
+  if (!timeString) return {hours: null, minutes: null};
+  
+  // Hantera intervall: ta första tiden
+  const firstTime = timeString.split(/[-–—]/)[0].trim();
+  
+  const match = firstTime.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return {hours: null, minutes: null};
+  
+  return {
+    hours: parseInt(match[1], 10),
+    minutes: parseInt(match[2], 10)
+  };
+}
+
+// createHand: Hjälpfunktion för SVG-tidvisare
+// Skapar en linje från centrum (cx, cy) med given längd och vinkel
+function createHand(cx, cy, length, angle, width) {
+  const rad = (angle - 90) * Math.PI / 180;
+  const x2 = cx + length * Math.cos(rad);
+  const y2 = cy + length * Math.sin(rad);
+  
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", cx);
+  line.setAttribute("y1", cy);
+  line.setAttribute("x2", x2);
+  line.setAttribute("y2", y2);
+  line.setAttribute("stroke", "var(--text)");
+  line.setAttribute("stroke-width", width);
+  line.setAttribute("stroke-linecap", "round");
+  
+  return line;
+}
+
+// renderAnalogClock: Skapar SVG-baserad analog klocka från "HH:MM" format
+// Visar urtavla, timmärken, timvisare och minutvisare.
+// Returnerar SVG-element eller null om tiden är felaktig.
+function renderAnalogClock(timeString) {
+  const {hours, minutes} = parseTime(timeString);
+  if (hours === null) return null;
+  
+  const hourAngle = (hours % 12) * 30 + minutes * 0.5;
+  const minuteAngle = minutes * 6;
+  
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "48");
+  svg.setAttribute("height", "48");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.style.display = "block";
+  
+  // Urtavla
+  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  circle.setAttribute("cx", "50");
+  circle.setAttribute("cy", "50");
+  circle.setAttribute("r", "45");
+  circle.setAttribute("fill", "var(--panel-2)");
+  circle.setAttribute("stroke", "var(--text)");
+  circle.setAttribute("stroke-width", "2");
+  
+  // Timmärken (små streck)
+  const hourMarks = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  for (let i = 0; i < 12; i++) {
+    const angle = i * 30;
+    const rad = (angle - 90) * Math.PI / 180;
+    const x1 = 50 + 40 * Math.cos(rad);
+    const y1 = 50 + 40 * Math.sin(rad);
+    const x2 = 50 + 45 * Math.cos(rad);
+    const y2 = 50 + 45 * Math.sin(rad);
+    
+    const mark = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    mark.setAttribute("x1", x1);
+    mark.setAttribute("y1", y1);
+    mark.setAttribute("x2", x2);
+    mark.setAttribute("y2", y2);
+    mark.setAttribute("stroke", "var(--muted)");
+    mark.setAttribute("stroke-width", i % 3 === 0 ? "2" : "1");
+    hourMarks.appendChild(mark);
+  }
+  
+  // Timvisare
+  const hourHand = createHand(50, 50, 25, hourAngle, 5);
+  
+  // Minutvisare
+  const minuteHand = createHand(50, 50, 38, minuteAngle, 3);
+  
+  // Centrumpunkt
+  const center = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  center.setAttribute("cx", "50");
+  center.setAttribute("cy", "50");
+  center.setAttribute("r", "4");
+  center.setAttribute("fill", "var(--text)");
+  
+  svg.appendChild(circle);
+  svg.appendChild(hourMarks);
+  svg.appendChild(hourHand);
+  svg.appendChild(minuteHand);
+  svg.appendChild(center);
+  
+  return svg;
+}
+
 function findNextUndoneId(){
   for (const slot of state.slots){
     for (const id of slot.items){
@@ -978,16 +1188,16 @@ function makeDefaultState(){
   const id = today.toISOString().slice(0,10);
   const slots = DEFAULT_SLOTS.map(s=>({ ...s, items: [] }));
   const people = [
-    { id: safeUUID(), name:"Mamma", status:"here", withWho:"", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
-    { id: safeUUID(), name:"Pappa", status:"later", withWho:"Mamma", eta:"18:00", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
-    { id: safeUUID(), name:"Syskon", status:"away", withWho:"Kompis", eta:"", withWhatEmoji:"", withWhatText:"", etaStart:"", etaEnd:"" },
+    { id: safeUUID(), name:"Mamma", status:"here", eta:"", withWhatEmoji:"💼", withWhatText:"Jobbar hemma", etaStart:"08:00", etaEnd:"16:00" },
+    { id: safeUUID(), name:"Pappa", status:"later", eta:"18:00", withWhatEmoji:"💼", withWhatText:"Jobbar", etaStart:"", etaEnd:"" },
+    { id: safeUUID(), name:"Syskon", status:"away", eta:"15:00", withWhatEmoji:"🏫", withWhatText:"Skola", etaStart:"", etaEnd:"" },
   ];
 
   // Exempel utifrån ditt schema (kan rensas av vuxen snabbt)
   const items = {};
   function add(slotKey, text, time, emoji){
     const id = safeUUID();
-    items[id] = {id, text, time, emoji, done:false};
+    items[id] = {id, text, time, emoji, done:false, participants:[]};
     slots.find(s=>s.key===slotKey).items.push(id);
   }
 
@@ -1020,16 +1230,39 @@ function saveState(){
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
-  try{ return JSON.parse(raw); }
+  try{
+    const loaded = JSON.parse(raw);
+    // Migration: lägg till participants-array till items om de saknas
+    // Detta gör app bakåtkompatibel med äldre sparade dagsplaner
+    if (loaded && loaded.items){
+      for (const id in loaded.items){
+        if (!loaded.items[id].participants){
+          loaded.items[id].participants = [];
+        }
+      }
+    }
+    return loaded;
+  }
   catch{ return null; }
 }
 
 // ----- People helpers -----
-// nextStatus borttagen (dropdown-only)
+// statusLabel: Konverterar status-värde till emoji-text för visning
 function statusLabel(s){
   if (s === "here") return "✅ här";
   if (s === "away") return "🚗 borta";
   return "⏳ senare";
+}
+
+// loadClockPreference: Hämta sparad analog/digital-inställning från localStorage
+function loadClockPreference() {
+  const saved = localStorage.getItem("bildstod_clock_mode");
+  return saved === "analog";
+}
+
+// saveClockPreference: Spara användarens val av analog eller digital klocka
+function saveClockPreference(isAnalog) {
+  localStorage.setItem("bildstod_clock_mode", isAnalog ? "analog" : "digital");
 }
 </script>
 </body>
